@@ -803,7 +803,9 @@ if( __levelIdx EQUAL -1 )
  message( SEND_ERROR "Specified Android native API level 'android-${ANDROID_NATIVE_API_LEVEL}' is not supported by your NDK/toolchain." )
 else()
  if( BUILD_WITH_ANDROID_NDK )
-  __DETECT_NATIVE_API_LEVEL( __realApiLevel "${ANDROID_NDK}/platforms/android-${ANDROID_NATIVE_API_LEVEL}/arch-${ANDROID_ARCH_NAME}/usr/include/android/api-level.h" )
+  # xiaofeng commented out for ndk-r17+
+  set(__realApiLevel ${ANDROID_NATIVE_API_LEVEL})
+  # __DETECT_NATIVE_API_LEVEL( __realApiLevel "${ANDROID_NDK}/platforms/android-${ANDROID_NATIVE_API_LEVEL}/arch-${ANDROID_ARCH_NAME}/usr/include/android/api-level.h" )
   if( NOT __realApiLevel EQUAL ANDROID_NATIVE_API_LEVEL AND NOT __realApiLevel GREATER 9000 )
    message( SEND_ERROR "Specified Android API level (${ANDROID_NATIVE_API_LEVEL}) does not match to the level found (${__realApiLevel}). Probably your copy of NDK is broken." )
   endif()
@@ -1304,8 +1306,14 @@ endif()
 
 # add crt object to executable link list for Android SDK build
 # ----------------------------------------------------------------------------
-set( ANDROID_CRT_BEGIN "${ANDROID_SYSROOT}/usr/lib/crtbegin_dynamic.o")
-set( ANDROID_CRT_END   "${ANDROID_SYSROOT}/usr/lib/crtend_android.o")
+# xiaofeng upadated for x86_64 and arm8v-a
+if (X86_64)
+ set( ANDROID_CRT_BEGIN "${ANDROID_SYSROOT}/usr/lib64/crtbegin_dynamic.o")
+ set( ANDROID_CRT_END   "${ANDROID_SYSROOT}/usr/lib64/crtend_android.o")
+else()
+ set( ANDROID_CRT_BEGIN "${ANDROID_SYSROOT}/usr/lib/crtbegin_dynamic.o")
+ set( ANDROID_CRT_END   "${ANDROID_SYSROOT}/usr/lib/crtend_android.o")
+endif()
 set( CMAKE_C_LINK_EXECUTABLE         "${CMAKE_C_LINK_EXECUTABLE} ${ANDROID_CRT_BEGIN} ${ANDROID_CRT_END}" )
 set( CMAKE_CXX_LINK_EXECUTABLE       "${CMAKE_CXX_LINK_EXECUTABLE} ${ANDROID_CRT_BEGIN} ${ANDROID_CRT_END}" )
 
@@ -1313,7 +1321,8 @@ set( CMAKE_CXX_LINK_EXECUTABLE       "${CMAKE_CXX_LINK_EXECUTABLE} ${ANDROID_CRT
 # ----------------------------------------------------------------------------
 # add libgcc.a to executable link list
 # ----------------------------------------------------------------------------
-set( ANDROID_LIB_GCC "${ANDROID_TOOLCHAIN_ROOT}/lib/gcc/${ANDROID_TOOLCHAIN_MACHINE_NAME}/${ANDROID_COMPILER_VERSION}/libgcc.a")
+# xiaofeng commented for ndk-17+
+# set( ANDROID_LIB_GCC "${ANDROID_TOOLCHAIN_ROOT}/lib/gcc/${ANDROID_TOOLCHAIN_MACHINE_NAME}/${ANDROID_COMPILER_VERSION}/libgcc.a")
 set( CMAKE_C_LINK_EXECUTABLE         "${CMAKE_C_LINK_EXECUTABLE} ${ANDROID_LIB_GCC}" )
 set( CMAKE_CXX_LINK_EXECUTABLE       "${CMAKE_CXX_LINK_EXECUTABLE} ${ANDROID_LIB_GCC}" )
 
@@ -1480,7 +1489,9 @@ if( DEFINED ANDROID_EXCEPTIONS AND ANDROID_STL_FORCE_FEATURES )
 endif()
 
 # global includes and link directories
-include_directories( SYSTEM "${ANDROID_SYSROOT}/usr/include" ${ANDROID_STL_INCLUDE_DIRS} )
+# xiaofeng updated for ndk-r17
+# include_directories( SYSTEM "${ANDROID_SYSROOT}/usr/include" ${ANDROID_STL_INCLUDE_DIRS} )
+include_directories( SYSTEM "${ANDROID_SYSROOT}/usr/include" "${ANDROID_NDK}/sysroot/usr/include" "${ANDROID_NDK}/sysroot/usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-android" ${ANDROID_STL_INCLUDE_DIRS} )
 
 # ----------------------------------------------------------------------------
 # comment unused directory detection
@@ -1493,7 +1504,9 @@ endif()
 # ----------------------------------------------------------------------------
 # add sysroot library
 # ----------------------------------------------------------------------------
-link_directories( "${ANDROID_SYSROOT}/usr/lib" )
+# xiaofeng updated for ndk-r17
+# link_directories( "${ANDROID_SYSROOT}/usr/lib" )
+link_directories( "${ANDROID_SYSROOT}/usr/lib" "${ANDROID_SYSROOT}/usr/lib64" )
 
 # detect if need link crtbegin_so.o explicitly
 if( NOT DEFINED ANDROID_EXPLICIT_CRT_LINK )

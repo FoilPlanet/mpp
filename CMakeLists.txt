@@ -386,3 +386,8 @@ install(FILES "${CMAKE_BINARY_DIR}/rockchip_mpp.pc"
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig/")
 install(FILES "${CMAKE_BINARY_DIR}/rockchip_vpu.pc"
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig/")
+
+# ----------------------------------------------------------------------------
+#  remote vpu or software codec
+# ----------------------------------------------------------------------------
+OPTION(USE_REMOTE_VPU "Build the project with remote vpu stubs" OFF)

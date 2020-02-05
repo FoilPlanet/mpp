@@ -22,5 +22,13 @@ add_library(hal_h264e STATIC
             ${HAL_H264E_SRC}
             )
 
+# remote vpu
+if (USE_REMOTE_VPU)
+include_directories(../../rvpu/h264e-stub/)
+add_definitions(-DUSE_REMOTE_VPU)
+target_link_libraries(hal_h264e hal_h264e_rkv hal_h264e_vpu hal_h264e_stub mpp_base)
+else()
 target_link_libraries(hal_h264e hal_h264e_rkv hal_h264e_vpu mpp_base)
+endif()
+
 set_target_properties(hal_h264e PROPERTIES FOLDER "mpp/hal")

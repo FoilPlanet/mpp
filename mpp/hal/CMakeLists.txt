@@ -11,6 +11,9 @@ add_subdirectory(rkenc)
 add_subdirectory(dummy)
 add_subdirectory(common)
 
+# Added by foilplanet for remote vpu
+add_subdirectory(rvpu)
+
 # ----------------------------------------------------------------------------
 # add mpp_hal implement
 # ----------------------------------------------------------------------------

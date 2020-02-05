@@ -33,6 +33,10 @@
 #include "hal_h264e_rkv.h"
 #include "hal_h264e_vepu1.h"
 
+#ifdef USE_REMOTE_VPU
+#include "hal_h264e_stub.h"
+#endif
+
 static MPP_RET hal_h264e_init(void *hal, MppHalCfg *cfg)
 {
     H264eHalContext *ctx = (H264eHalContext *)hal;
@@ -78,9 +82,23 @@ static MPP_RET hal_h264e_init(void *hal, MppHalCfg *cfg)
         api->control = hal_h264e_vepu1_control;
         hw_cfg->hw_type = H264E_VPU;
     } else {
+      #ifdef USE_REMOTE_VPU
+        api->init    = hal_h264e_stub_init;
+        api->deinit  = hal_h264e_stub_deinit;
+        api->reg_gen = hal_h264e_stub_gen_regs;
+        api->start   = hal_h264e_stub_start;
+        api->wait    = hal_h264e_stub_wait;
+        api->reset   = hal_h264e_stub_reset;
+        api->flush   = hal_h264e_stub_flush;
+        api->control = hal_h264e_stub_control;
+        hw_cfg->hw_type = H264E_VPU;
+        mpp_log("vcodec type %08x use remote H.264 encoder device\n",
+                vcodec_type);
+      #else /* !USE_REMOTE_VPU */
         mpp_err("vcodec type %08x can not find H.264 encoder device\n",
                 vcodec_type);
         return MPP_NOK;
+      #endif /* USE_REMOTE_VPU */
     }
 
     /*
