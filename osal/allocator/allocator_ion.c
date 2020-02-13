@@ -263,6 +263,14 @@ static RK_S32 check_sysfs_iommu()
         }
     }
 
+#if 1
+    if (!ion_info_found) {
+        ion_info_found = 1;
+        mpp_log("Forcefully set IOMMU eanble.\n");
+        ret = ION_DETECT_IOMMU_ENABLE;
+    }
+#endif
+
     if (!dts_info_found && !ion_info_found) {
         mpp_err("can not find any hint from all possible devices\n");
         ret = ION_DETECT_NO_DTS;
