@@ -391,3 +391,6 @@ install(FILES "${CMAKE_BINARY_DIR}/rockchip_vpu.pc"
 #  remote vpu or software codec
 # ----------------------------------------------------------------------------
 OPTION(USE_REMOTE_VPU "Build the project with remote vpu stubs" OFF)
+OPTION(USE_SOFT_JPEG  "Build-in with software jpeg encoder"  ON)
+OPTION(USE_SOFT_X264  "Build-in with software H.264 encoder" OFF)
+OPTION(USE_VPU_NVIDIA "Build-in with NVidia GPU/VPU support" OFF)

@@ -75,8 +75,19 @@ case $ANDROID_ABI in
         -DANDROID_NATIVE_API_LEVEL=${API_LEVEL}                               \
         -DANDROID_STL=system                                                  \
         -DUSE_REMOTE_VPU=ON                                                   \
+        -DUSE_VPU_NVIDIA=ON                                                   \
         ..
     ;;
+  install)
+    INSTALL_PATH=../minicap/jni/vendor/mpp-wrapper
+    mkdir -p libs/x86_64
+    mkdir -p libs/arm64-v8a
+    cd ..
+    cp -av ./build-x86_64/mpp/libmpp*    ${BUILD_PATH}/libs/x86_64
+    cp -av ./build-arm64-v8a/mpp/libmpp* ${BUILD_PATH}/libs/arm64-v8a
+    cp -av ${BUILD_PATH}/libs/*          ${INSTALL_PATH}/libs
+    exit 0
+    ;; 
   *)
     echo "Unknown ABI type $ANDROID_ABI"
     exit 1

@@ -17,12 +17,11 @@ add_library(${HAL_JPEGE} STATIC
     )
 
 # remote vpu or software codec
-if (USE_REMOTE_VPU AND ANDROID)
-include_directories(../../rvpu/jpege/)
-add_definitions(-DUSE_REMOTE_VPU)
-target_link_libraries(${HAL_JPEGE} hal_jpege_stub mpp_base)
-else()
-target_link_libraries(${HAL_JPEGE} mpp_base)
+if (USE_SOFT_JPEG)
+  include_directories(../../rvpu/jpege/)
+  add_definitions(-DUSE_SOFT_JPEG)
+  set(HAL_JPEGE_LIBS hal_jpege_stub)
 endif()
 
+target_link_libraries(${HAL_JPEGE} ${HAL_JPEGE_LIBS} mpp_base)
 set_target_properties(${HAL_JPEGE} PROPERTIES FOLDER "mpp/hal")

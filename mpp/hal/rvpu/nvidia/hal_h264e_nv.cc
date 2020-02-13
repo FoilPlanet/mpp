@@ -54,9 +54,7 @@ static MPP_RET reinit_nvenc(MppEncCfgSet *cfg, HalNvEncInfo *info)
 
     mpp_log("init nvenc %dx%d %d fps", width, height, cfg->rc.fps_in_num);
 
-#ifdef _VPU_STUB_
-
-#else /* !_VPU_STUB_ */
+#ifndef _VPU_STUB_
     if (NULL != info->encoder) {
         info->encoder->DestroyEncoder();
         delete info->encoder;
@@ -111,9 +109,7 @@ MPP_RET hal_h264e_nv_init(void *hal, MppHalCfg *cfg)
 
     mpp_log("init %p", ctx);
 
-#ifdef _VPU_STUB_
-
-#else /* !_VPU_STUB_ */
+#ifndef _VPU_STUB_
 
     ctx->extra_info = mpp_calloc(HalNvEncInfo, 1);
     if (NULL == (info = (HalNvEncInfo *)ctx->extra_info)) {
@@ -153,10 +149,7 @@ MPP_RET hal_h264e_nv_deinit(void *hal)
 
     mpp_log("deinit %p", ctx);
 
-#ifdef _VPU_STUB_
-
-#else /* !_VPU_STUB_ */
-
+#ifndef _VPU_STUB_
     if (ctx->extra_info) {
         HalNvEncInfo *info = (HalNvEncInfo *)ctx->extra_info;
 
@@ -211,10 +204,7 @@ MPP_RET hal_h264e_nv_start(void *hal, HalTaskInfo *task)
     H264eHalContext *ctx = (H264eHalContext *)hal;
     HalNvEncInfo *info = (HalNvEncInfo *)ctx->extra_info;
 
-#ifdef _VPU_STUB_
-    // in container, send task to queue
-
-#else /* !_VPU_STUB_ */
+#ifndef _VPU_STUB_
     // in host, send task to nvenc
 
     MppBuffer   input  = task->enc.input;
@@ -251,12 +241,7 @@ MPP_RET hal_h264e_nv_wait(void *hal, HalTaskInfo *task)
     H264eHalContext *ctx = (H264eHalContext *)hal;
     HalNvEncInfo *info = (HalNvEncInfo *)ctx->extra_info;
 
-#ifdef _VPU_STUB_
-    // in container, wait result from queue
-    size_t offset = sizeof(NV_ENC_ENCODE_OUT_PARAMS);
-
-#else /* !_VPU_STUB_ */
-
+#ifndef _VPU_STUB_
     // in host, wait nvenc response
     MppBuffer   output = task->enc.output;
 

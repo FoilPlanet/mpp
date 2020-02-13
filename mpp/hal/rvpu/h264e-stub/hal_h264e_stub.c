@@ -20,20 +20,41 @@
 #include <math.h>
 #include <limits.h>
 
+#include <fcntl.h>
+#include <sys/errno.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/un.h>
+#include <unistd.h>
+
 #include "mpp_device.h"
 #include "mpp_common.h"
 #include "mpp_mem.h"
+#include "mpp_log.h"
 
 #include "h264_syntax.h"
 #include "hal_h264e_stub.h"
+
+#ifdef USE_VPU_NVIDIA
+#include "hal_h264e_nv.h"
+#endif
 
 #ifdef USE_SOFT_VPU_X264
 #include "hal_h264e_x264.h"
 #endif
 
-#ifdef USE_REMOTE_VPU_NVIDIA
-#include "hal_h264e_nv.h"
+#ifdef _VPU_STUB_
+#define DEF_RVPU_SOCKNAME       "/dev/anbox_audio"
+static int remote_fd = -1;
 #endif
+
+/**
+ * RVPU channel client info
+ */
+typedef struct _client_info {
+    unsigned char type;         /**< 0:playback 1:recording 2:screenshot(*) */
+} ClientInfo;
 
 MPP_RET hal_h264e_stub_init(void *hal, MppHalCfg *cfg)
 {
@@ -47,11 +68,68 @@ MPP_RET hal_h264e_stub_init(void *hal, MppHalCfg *cfg)
     ctx->cfg = cfg->cfg;
     ctx->set = cfg->set;
 
-#if defined(USE_REMOTE_VPU_NVIDIA)
+#if defined(USE_VPU_NVIDIA)
     ret = hal_h264e_nv_init(hal, cfg);
 #elif defined(USE_SOFT_VPU_X264)
     ret = hal_h264e_x264_init(hal, cfg);
 #endif
+
+#ifdef _VPU_STUB_
+    if (-1 == remote_fd) {  // connect to unix socket
+        struct sockaddr_un addr;
+        const char *srvname = DEF_RVPU_SOCKNAME;
+        int fd, len;
+
+        if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+            mpp_err("create socket with error: %s", strerror(errno));
+            return MPP_ERR_OPEN_FILE;
+        }
+
+        // bind to a temporary path
+    #ifdef CLIENT_BIND_PATH
+        memset(&addr, 0, sizeof(addr));
+        addr.sun_family = AF_UNIX;
+        sprintf(addr.sun_path, "/var/run/mpp%05d.socket", getpid());
+        unlink(addr.sun_path);
+        len = offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path);
+        if (bind(fd, (struct sockaddr*)&addr, len) < 0) {
+            close(fd);
+            mpp_err("bind to '%s' with error: %s", addr.sun_path, strerror(errno));
+            return MPP_ERR_OPEN_FILE;
+        }
+    #endif /* CLIENT_BIND_PATH */
+
+        memset(&addr, 0, sizeof(addr));
+        addr.sun_family = AF_UNIX;
+        strncpy(addr.sun_path, srvname, strlen(srvname));
+        len = offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path);
+        if (connect(fd, (struct sockaddr *)&addr, len) < 0) {
+            close(fd);
+            mpp_err("connect to '%s' with error: %s", addr.sun_path, strerror(errno));
+            return MPP_ERR_OPEN_FILE;
+        }
+
+        if ((remote_fd = fd) > 0) { // create a channel for streaming
+            int nread;
+            ClientInfo cmd = { 0x02 }, rsp;
+            mpp_log("connected to '%s'", addr.sun_path);
+            (void) write(remote_fd, &cmd, sizeof(cmd));
+            nread = read(remote_fd, &rsp, sizeof(rsp));
+            if (nread < 0 || rsp.type != cmd.type) {
+                mpp_err("invalid response type %d (%s)", rsp.type, sizeof(rsp));
+            }
+        }
+    }
+
+    if (remote_fd > 0) {
+        char buf[64];
+        size_t len = sizeof(H264eHalContext);
+        int n = sprintf(buf, "init:%d:", len);
+        send(remote_fd, buf, n,   MSG_NOSIGNAL);
+        send(remote_fd, ctx, len, MSG_NOSIGNAL);
+    }
+#endif
+
     return ret;
 }
 
@@ -66,10 +144,20 @@ MPP_RET hal_h264e_stub_deinit(void *hal)
         ctx->param_buf = NULL;
     }
 
-#if defined(USE_REMOTE_VPU_NVIDIA)
+#if defined(USE_VPU_NVIDIA)
     ret = hal_h264e_nv_deinit(hal);
 #elif defined(USE_SOFT_VPU_X264)
     ret = hal_h264e_x264_deinit(hal);
+#endif
+
+#ifdef _VPU_STUB_
+    if (remote_fd > 0) {
+        char buf[64];
+        int n = sprintf(buf, "deinit:0:");
+        send(remote_fd, buf, n, MSG_NOSIGNAL);
+        close(remote_fd);
+        remote_fd = -1;
+    }
 #endif
 
     return ret;
@@ -91,10 +179,18 @@ MPP_RET hal_h264e_stub_gen_regs(void *hal, HalTaskInfo *task)
     // mbs_in_row = (prep->width + 15) / 16;
     // mbs_in_col = (prep->height + 15) / 16;
 
-#if defined(USE_REMOTE_VPU_NVIDIA)
+#if defined(USE_VPU_NVIDIA)
     ret = hal_h264e_nv_gen_regs(hal, task);
 #elif defined(USE_SOFT_VPU_X264)
     ret = hal_h264e_x264_gen_regs(hal, task);
+#endif
+
+#ifdef _VPU_STUB_
+    if (remote_fd > 0) {
+        char buf[64];
+        int n = sprintf(buf, "gen_regs:0:");
+        send(remote_fd, buf, n, MSG_NOSIGNAL);
+    }
 #endif
 
     return ret;
@@ -105,10 +201,18 @@ MPP_RET hal_h264e_stub_start(void *hal, HalTaskInfo *task)
     MPP_RET ret = MPP_OK;
     // mpp_log("start v:%u\n", task->enc.valid);
 
-#if defined(USE_REMOTE_VPU_NVIDIA)
+#if defined(USE_VPU_NVIDIA)
     ret = hal_h264e_nv_start(hal, task);
 #elif defined(USE_SOFT_VPU_X264)
     ret = hal_h264e_x264_start(hal, task);
+#endif
+
+#ifdef _VPU_STUB_
+    if (remote_fd > 0) {
+        char buf[64];
+        int n = sprintf(buf, "start:0:");
+        send(remote_fd, buf, n, MSG_NOSIGNAL);
+    }
 #endif
 
     return ret;
@@ -126,11 +230,20 @@ MPP_RET hal_h264e_stub_wait(void *hal, HalTaskInfo *task)
 
     // mpp_log("wait w:%u v:%u\n", ctx->cfg->prep.hor_stride, task->enc.valid);
 
-#if defined(USE_REMOTE_VPU_NVIDIA)
+#if defined(USE_VPU_NVIDIA)
     ret = hal_h264e_nv_wait(hal, task);
 #elif defined(USE_SOFT_VPU_X264)
     ret = hal_h264e_x264_wait(hal, task);
 #endif
+
+#ifdef _VPU_STUB_
+    if (remote_fd > 0) {
+        char buf[64];
+        int n = sprintf(buf, "wait:0:");
+        send(remote_fd, buf, n, MSG_NOSIGNAL);
+    }
+#endif
+
     return ret;
 }
 
@@ -139,11 +252,20 @@ MPP_RET hal_h264e_stub_reset(void *hal)
     MPP_RET ret = MPP_OK;
     mpp_log("reset %p\n", hal);
 
-#if defined(USE_REMOTE_VPU_NVIDIA)
+#if defined(USE_VPU_NVIDIA)
     ret = hal_h264e_nv_reset(hal);
 #elif defined(USE_SOFT_VPU_X264)
     ret = hal_h264e_x264_reset(hal);
 #endif
+
+#ifdef _VPU_STUB_
+    if (remote_fd > 0) {
+        char buf[64];
+        int n = sprintf(buf, "reset:0:");
+        send(remote_fd, buf, n, MSG_NOSIGNAL);
+    }
+#endif
+
     return ret;
 }
 
@@ -152,11 +274,20 @@ MPP_RET hal_h264e_stub_flush(void *hal)
     MPP_RET ret = MPP_OK;
     mpp_log("flush %p\n", hal);
 
-#if defined(USE_REMOTE_VPU_NVIDIA)
+#if defined(USE_VPU_NVIDIA)
     ret = hal_h264e_nv_flush(hal);
 #elif defined(USE_SOFT_VPU_X264)
     ret = hal_h264e_x264_flush(hal);
 #endif
+
+#ifdef _VPU_STUB_
+    if (remote_fd > 0) {
+        char buf[64];
+        int n = sprintf(buf, "flush:0:");
+        send(remote_fd, buf, n, MSG_NOSIGNAL);
+    }
+#endif
+
     return ret;
 }
 
@@ -303,10 +434,20 @@ MPP_RET hal_h264e_stub_control(void *hal, RK_S32 cmd, void *param)
         break;
     }
 
-#if defined(USE_REMOTE_VPU_NVIDIA)
+#if defined(USE_VPU_NVIDIA)
     ret = hal_h264e_nv_control(hal, cmd, param);
 #elif defined(USE_SOFT_VPU_X264)
     ret = hal_h264e_x264_control(hal, cmd, param);
+#endif
+
+#ifdef _VPU_STUB_
+    if (remote_fd > 0) {
+        char buf[64];
+        size_t len = sizeof(H264eHalContext);
+        int n = sprintf(buf, "control:%d:", len);
+        send(remote_fd, buf, n,   MSG_NOSIGNAL);
+        send(remote_fd, ctx, len, MSG_NOSIGNAL);
+    }
 #endif
 
     return ret;

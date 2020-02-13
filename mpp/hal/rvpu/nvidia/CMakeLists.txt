@@ -3,29 +3,41 @@ include_directories(.)
 include_directories(../../common/h264/)
 include_directories(./include)
 
-# hal h264 header
-set(HAL_H264E_HDR
+if (ANDROID)
+  set(TARGET_ABI ${ANDROID_ABI})
+endif ()
+
+if (NOT CUDA_PATH)
+  set(CUDA_PATH /usr/lib/${TARGET_ABI}-linux-gnu)
+endif ()
+
+# hal nvidia header
+set(HAL_NVIDIA_HDR
     hal_h264e_nv.h
     )
 
-# hal h264 encoder sourse
-set(HAL_H264E_SRC
+# hal nvidia encoder sourse
+set(HAL_NVIDIA_SRC
     hal_h264e_nv.cc
     NvEncoder.cpp
+    NvEncoderCuda.cpp
     NvEncoderOutputInVidMemCuda.cpp
     )
 
-add_library(hal_h264e_nv STATIC
-            ${HAL_H264E_HDR}
-            ${HAL_H264E_SRC}
-            )
+set(NVIDIA_LIBS
+    ${CUDA_PATH}/libcuda.so
+#   ${CMAKE_CURRENT_SOURCE_DIR}/libs/${TARGET_ABI}-linux/libnvcuvid.so
+    ${CMAKE_CURRENT_SOURCE_DIR}/libs/${TARGET_ABI}-linux/libnvidia-encode.so
+    )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions -fpermissive -Wno-missing-field-initializers -Wno-unused-parameter")
 
+add_library(hal_h264e_nv STATIC ${HAL_NVIDIA_HDR} ${HAL_NVIDIA_SRC})
+
 # NOTE: nvidia hal requires remote stub for using in android
 if (ANDROID)
-add_definitions(-D_VPU_STUB_)
+  add_definitions(-D_VPU_STUB_)
 endif ()
 
-target_link_libraries(hal_h264e_nv hal_h264e)
+target_link_libraries(hal_h264e_nv ${NVIDIA_LIBS} hal_h264e)
 set_target_properties(hal_h264e_nv PROPERTIES FOLDER "mpp/hal")

@@ -17,19 +17,23 @@ add_library(hal_h264e_stub STATIC
             ${HAL_H264E_SRC}
             )
 
-# remote encoder - nvenc
-if (USE_REMOTE_VPU_NVIDIA)
-include_directories(../nvidia)
-add_definitions(-DUSE_REMOTE_VPU_NVIDIA)
+if (USE_VPU_NVIDIA AND NOT ANDROID)
+  include_directories(../nvidia)
+  add_definitions(-DUSE_VPU_NVIDIA)
+  set(H264E_STUB_DEPS hal_h264e_nv)
 endif ()
 
-# software encoder - x264
-if (ANDROID)
-include_directories(../x264e)
-add_definitions(-DUSE_SOFT_VPU_X264)
-target_link_libraries(hal_h264e_stub hal_h264e_nv hal_h264e_x264 hal_h264e)
-else ()
-target_link_libraries(hal_h264e_stub hal_h264e_nv hal_h264e)
+if (USE_SOFT_X264)
+  include_directories(../x264e)
+  add_definitions(-DUSE_SOFT_VPU_X264)
+  set(H264E_STUB_DEPS hal_h264e_x264)
 endif ()
 
+if (USE_REMOTE_VPU)
+  if (ANDROID AND USE_VPU_NVIDIA)
+    add_definitions(-D_VPU_STUB_)
+  endif ()
+endif ()
+
+target_link_libraries(hal_h264e_stub ${H264E_STUB_DEPS} hal_h264e)
 set_target_properties(hal_h264e_stub PROPERTIES FOLDER "mpp/hal")
