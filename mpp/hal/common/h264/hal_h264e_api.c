@@ -82,7 +82,7 @@ static MPP_RET hal_h264e_init(void *hal, MppHalCfg *cfg)
         api->control = hal_h264e_vepu1_control;
         hw_cfg->hw_type = H264E_VPU;
     } else {
-      #ifdef USE_REMOTE_VPU
+      #if defined(USE_REMOTE_VPU) || defined(USE_SOFT_X264) || defined(USE_VPU_NVIDIA)
         api->init    = hal_h264e_stub_init;
         api->deinit  = hal_h264e_stub_deinit;
         api->reg_gen = hal_h264e_stub_gen_regs;

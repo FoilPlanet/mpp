@@ -12,13 +12,14 @@ ANDROID_ABI=${1:-"arm64-v8a"}
 API_LEVEL=android-24
 BUILD_PATH=build-${ANDROID_ABI}
 
-MAKE_PROGRAM=`which make`
+INSTALL_PREFIX=../minicap/jni/vendor/mpp-wrapper
 
-echo "--- Build $ANDROID_ABI in '$BUILD_PATH' ---"
-mkdir -p ${BUILD_PATH} && cd ${BUILD_PATH}
+MAKE_PROGRAM=`which make`
 
 case $ANDROID_ABI in
   armeabi-v7a)
+    echo "--- Build $ANDROID_ABI in '$BUILD_PATH' ---"
+    mkdir -p ${BUILD_PATH} && cd ${BUILD_PATH}
     PLATFORM=$ANDROID_NDK/platforms/${API_LEVEL}/arch-arm
     cmake -DCMAKE_TOOLCHAIN_FILE=../build/android/android.toolchain.cmake     \
         -DCMAKE_BUILD_TYPE=Release                                            \
@@ -35,6 +36,8 @@ case $ANDROID_ABI in
         ..
     ;;
   arm64-v8a)
+    echo "--- Build $ANDROID_ABI in '$BUILD_PATH' ---"
+    mkdir -p ${BUILD_PATH} && cd ${BUILD_PATH}
     PLATFORM=$ANDROID_NDK/platforms/${API_LEVEL}/arch-arm64
     cmake -DCMAKE_TOOLCHAIN_FILE=../build/android/android.toolchain.cmake     \
         -DCMAKE_BUILD_TYPE=Release                                            \
@@ -51,6 +54,8 @@ case $ANDROID_ABI in
         ..
     ;;
   x86)
+    echo "--- Build $ANDROID_ABI in '$BUILD_PATH' ---"
+    mkdir -p ${BUILD_PATH} && cd ${BUILD_PATH}
     PLATFORM=$ANDROID_NDK/platforms/${API_LEVEL}/arch-x86
     cmake -DCMAKE_TOOLCHAIN_FILE=../build/android/android.toolchain.cmake     \
         -DCMAKE_BUILD_TYPE=Release                                            \
@@ -65,6 +70,8 @@ case $ANDROID_ABI in
         ..
     ;;
   x86_64)
+    echo "--- Build $ANDROID_ABI in '$BUILD_PATH' ---"
+    mkdir -p ${BUILD_PATH} && cd ${BUILD_PATH}
     PLATFORM=$ANDROID_NDK/platforms/${API_LEVEL}/arch-x86_64
     cmake -DCMAKE_TOOLCHAIN_FILE=../build/android/android.toolchain.cmake     \
         -DCMAKE_BUILD_TYPE=Release                                            \
@@ -75,17 +82,12 @@ case $ANDROID_ABI in
         -DANDROID_NATIVE_API_LEVEL=${API_LEVEL}                               \
         -DANDROID_STL=system                                                  \
         -DUSE_REMOTE_VPU=ON                                                   \
-        -DUSE_VPU_NVIDIA=ON                                                   \
         ..
     ;;
   install)
-    INSTALL_PATH=../minicap/jni/vendor/mpp-wrapper
-    mkdir -p libs/x86_64
-    mkdir -p libs/arm64-v8a
-    cd ..
-    cp -av ./build-x86_64/mpp/libmpp*    ${BUILD_PATH}/libs/x86_64
-    cp -av ./build-arm64-v8a/mpp/libmpp* ${BUILD_PATH}/libs/arm64-v8a
-    cp -av ${BUILD_PATH}/libs/*          ${INSTALL_PATH}/libs
+    INSTALL_PATH=$INSTALL_PREFIX
+    cp -av ./build-x86_64/mpp/libmpp*    ${INSTALL_PATH}/libs/x86_64
+    cp -av ./build-arm64-v8a/mpp/libmpp* ${INSTALL_PATH}/libs/arm64-v8a
     exit 0
     ;; 
   *)

@@ -44,6 +44,17 @@ typedef struct hal_x264_info_s {
     uint32_t        bitrate;
 } Halx264ExtraInfo;
 
+/**
+ * __assert2 referenced in libx264.a
+ */
+extern int __assert2(int) __attribute__((weak));
+int __assert2(int val)
+{
+    if (!val) {
+        mpp_err("assert in x264\n");
+    }
+}
+
 static int get_rf_constant(Halx264ExtraInfo *info)
 {
     (void)info;

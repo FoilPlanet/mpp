@@ -23,7 +23,15 @@ add_library(hal_h264e STATIC
             )
 
 # remote vpu
-if (USE_REMOTE_VPU)
+if (USE_VPU_NVIDIA)
+  add_definitions(-DUSE_VPU_NVIDIA)
+endif ()
+
+if (USE_SOFT_X264)
+  add_definitions(-DUSE_SOFT_X264)
+endif ()
+
+if (USE_REMOTE_VPU OR USE_VPU_NVIDIA OR USE_SOFT_X264)
   include_directories(../../rvpu/h264e-stub/)
   add_definitions(-DUSE_REMOTE_VPU)
   set(HAL_H264E_LIBS hal_h264e_rkv hal_h264e_vpu hal_h264e_stub)

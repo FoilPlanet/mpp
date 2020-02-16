@@ -56,10 +56,25 @@ typedef struct _client_info {
     unsigned char type;         /**< 0:playback 1:recording 2:screenshot(*) */
 } ClientInfo;
 
+void send_remote(int fd, RVPU_PRIM_CODE prim, void *data, size_t datasiz)
+{
+    char buf[8 + sizeof(H264eHalContext)];
+    size_t len;
+    if (datasiz > 0) {
+        int n = sprintf(buf, "%d:%lu:", prim, datasiz);
+        memcpy(&buf[n], data, datasiz);
+        len = n + datasiz;
+    } else {
+        len = sprintf(buf, "%d:0:", prim);
+    }
+    send(fd, buf, len, MSG_NOSIGNAL);
+}
+
 MPP_RET hal_h264e_stub_init(void *hal, MppHalCfg *cfg)
 {
     MPP_RET ret = MPP_OK;
     H264eHalContext *ctx = (H264eHalContext *)hal;
+    
     // mpp_log("init %p\n", ctx);
 
     ctx->int_cb = cfg->hal_int_cb;
@@ -122,11 +137,7 @@ MPP_RET hal_h264e_stub_init(void *hal, MppHalCfg *cfg)
     }
 
     if (remote_fd > 0) {
-        char buf[64];
-        size_t len = sizeof(H264eHalContext);
-        int n = sprintf(buf, "init:%d:", len);
-        send(remote_fd, buf, n,   MSG_NOSIGNAL);
-        send(remote_fd, ctx, len, MSG_NOSIGNAL);
+        send_remote(remote_fd, RVPU_PRIM_INIT, NULL, 0);
     }
 #endif
 
@@ -152,9 +163,7 @@ MPP_RET hal_h264e_stub_deinit(void *hal)
 
 #ifdef _VPU_STUB_
     if (remote_fd > 0) {
-        char buf[64];
-        int n = sprintf(buf, "deinit:0:");
-        send(remote_fd, buf, n, MSG_NOSIGNAL);
+        send_remote(remote_fd, RVPU_PRIM_DEINIT, NULL, 0);
         close(remote_fd);
         remote_fd = -1;
     }
@@ -167,6 +176,8 @@ MPP_RET hal_h264e_stub_gen_regs(void *hal, HalTaskInfo *task)
 {
     MPP_RET ret = MPP_OK;
     H264eHalContext *ctx  = (H264eHalContext *)hal;
+    (void) ctx;
+    (void) task;
     // MppEncPrepCfg   *prep = &ctx->cfg->prep;
     
     // H264eHwCfg *hw_cfg   = &ctx->hw_cfg;
@@ -187,9 +198,7 @@ MPP_RET hal_h264e_stub_gen_regs(void *hal, HalTaskInfo *task)
 
 #ifdef _VPU_STUB_
     if (remote_fd > 0) {
-        char buf[64];
-        int n = sprintf(buf, "gen_regs:0:");
-        send(remote_fd, buf, n, MSG_NOSIGNAL);
+        send_remote(remote_fd, RVPU_PRIM_REGS, NULL, 0);
     }
 #endif
 
@@ -209,9 +218,15 @@ MPP_RET hal_h264e_stub_start(void *hal, HalTaskInfo *task)
 
 #ifdef _VPU_STUB_
     if (remote_fd > 0) {
-        char buf[64];
-        int n = sprintf(buf, "start:0:");
-        send(remote_fd, buf, n, MSG_NOSIGNAL);
+        MppBuffer input = task->enc.input;
+        MppBufferInfo binfo;
+        (void)hal;
+        mpp_buffer_info_get(input, &binfo);
+        if (binfo.type == MPP_BUFFER_TYPE_ION) {
+            send_remote(remote_fd, RVPU_PRIM_START, &binfo, sizeof(binfo));
+        } else {
+            send_remote(remote_fd, RVPU_PRIM_START, NULL, 0);
+        }
     }
 #endif
 
@@ -221,7 +236,7 @@ MPP_RET hal_h264e_stub_start(void *hal, HalTaskInfo *task)
 MPP_RET hal_h264e_stub_wait(void *hal, HalTaskInfo *task)
 {
     MPP_RET ret = MPP_OK;
-    H264eHalContext *ctx = (H264eHalContext *)hal;
+    // H264eHalContext *ctx = (H264eHalContext *)hal;
     // HalEncTask  *info   = &task->enc;
     // MppBuffer   input   = info->input;
     // MppBuffer   output  = info->output;
@@ -238,9 +253,20 @@ MPP_RET hal_h264e_stub_wait(void *hal, HalTaskInfo *task)
 
 #ifdef _VPU_STUB_
     if (remote_fd > 0) {
-        char buf[64];
-        int n = sprintf(buf, "wait:0:");
-        send(remote_fd, buf, n, MSG_NOSIGNAL);
+        MppBuffer     output = task->enc.output;
+        MppBufferInfo binfo;
+        (void)hal;
+        mpp_buffer_info_get(output, &binfo);
+        if (binfo.type == MPP_BUFFER_TYPE_ION) {
+            // unsigned char *pbuf  = mpp_buffer_get_ptr(output);
+            // TODO: clear output buffer ready-flag
+            // pbuf[0] = '\0';
+            send_remote(remote_fd, RVPU_PRIM_WAIT, &binfo, sizeof(binfo));
+            // TODO: set output buffer ready-flag
+            // while (!puf[0]) { usleep(100); }
+        } else {
+            send_remote(remote_fd, RVPU_PRIM_WAIT, NULL, 0);
+        }
     }
 #endif
 
@@ -260,9 +286,7 @@ MPP_RET hal_h264e_stub_reset(void *hal)
 
 #ifdef _VPU_STUB_
     if (remote_fd > 0) {
-        char buf[64];
-        int n = sprintf(buf, "reset:0:");
-        send(remote_fd, buf, n, MSG_NOSIGNAL);
+        send_remote(remote_fd, RVPU_PRIM_RESET, NULL, 0);
     }
 #endif
 
@@ -282,9 +306,7 @@ MPP_RET hal_h264e_stub_flush(void *hal)
 
 #ifdef _VPU_STUB_
     if (remote_fd > 0) {
-        char buf[64];
-        int n = sprintf(buf, "flush:0:");
-        send(remote_fd, buf, n, MSG_NOSIGNAL);
+        send_remote(remote_fd, RVPU_PRIM_FLUSH, NULL, 0);
     }
 #endif
 
@@ -311,7 +333,6 @@ MPP_RET hal_h264e_stub_control(void *hal, RK_S32 cmd, void *param)
 
     case MPP_ENC_SET_PREP_CFG:
         mpp_log("control with cmd MPP_ENC_SET_PREP_CFG\n");
-
         if (NULL != (set = ctx->set)) {
             MppEncPrepCfg *prep = &set->prep;
             RK_U32 change = prep->change;
@@ -336,12 +357,26 @@ MPP_RET hal_h264e_stub_control(void *hal, RK_S32 cmd, void *param)
                     ret = MPP_NOK;
                 }
             }
+
+          #ifdef _VPU_STUB_
+            if (remote_fd > 0) {
+                send_remote(remote_fd, RVPU_PRIM_CONTROL_PREP, prep, sizeof(*prep));
+            }
+          #endif
         }
         break;
 
     case MPP_ENC_SET_RC_CFG:
         // TODO: do rate control check here
         mpp_log("control with cmd MPP_ENC_SET_RC_CFG\n");
+        if (NULL != (set = ctx->set)) {
+          #ifdef _VPU_STUB_
+            MppEncRcCfg *rc = &ctx->set->rc;
+            if (remote_fd > 0) {
+                send_remote(remote_fd, RVPU_PRIM_CONTROL_RC, rc, sizeof(*rc));
+            }
+          #endif
+        }
         break;
 
     case MPP_ENC_SET_CODEC_CFG:
@@ -405,6 +440,12 @@ MPP_RET hal_h264e_stub_control(void *hal, RK_S32 cmd, void *param)
             */
             dst->change |= change;
             src->change = 0;
+
+          #ifdef _VPU_STUB_
+            if (remote_fd > 0) {
+                send_remote(remote_fd, RVPU_PRIM_CONTROL_CODEC, dst, sizeof(*dst));
+            }
+          #endif
         }
         break;
 
@@ -413,8 +454,14 @@ MPP_RET hal_h264e_stub_control(void *hal, RK_S32 cmd, void *param)
         break;
 
     case MPP_ENC_SET_SEI_CFG:
-        mpp_log("control with cmd MPP_ENC_SET_SEI_CFG\n");
+        // mpp_log("control with cmd MPP_ENC_SET_SEI_CFG\n");
         ctx->sei_mode = *((MppEncSeiMode *)param);
+
+      #ifdef _VPU_STUB_
+        if (remote_fd > 0) {
+            send_remote(remote_fd, RVPU_PRIM_CONTROL_SEI, &ctx->sei_mode, sizeof(ctx->sei_mode));
+        }
+      #endif
         break;
 
     case MPP_ENC_GET_HDR_SYNC:
@@ -438,16 +485,6 @@ MPP_RET hal_h264e_stub_control(void *hal, RK_S32 cmd, void *param)
     ret = hal_h264e_nv_control(hal, cmd, param);
 #elif defined(USE_SOFT_VPU_X264)
     ret = hal_h264e_x264_control(hal, cmd, param);
-#endif
-
-#ifdef _VPU_STUB_
-    if (remote_fd > 0) {
-        char buf[64];
-        size_t len = sizeof(H264eHalContext);
-        int n = sprintf(buf, "control:%d:", len);
-        send(remote_fd, buf, n,   MSG_NOSIGNAL);
-        send(remote_fd, ctx, len, MSG_NOSIGNAL);
-    }
 #endif
 
     return ret;

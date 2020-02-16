@@ -22,6 +22,27 @@
 #include "hal_task.h"
 #include "hal_h264e_com.h"
 
+/**
+ * Codeing primtive sent to remote server
+ *   message format: {code}:{length}:{data}
+ */
+typedef enum rvpu_primitive_t {
+    RVPU_PRIM_UNDEFINED = 0,
+    RVPU_PRIM_INIT,
+    RVPU_PRIM_DEINIT,
+    RVPU_PRIM_REGS,
+    RVPU_PRIM_START,
+    RVPU_PRIM_WAIT,
+    RVPU_PRIM_CONTROL_PREP,
+    RVPU_PRIM_CONTROL_RC,
+    RVPU_PRIM_CONTROL_CODEC,
+    RVPU_PRIM_CONTROL_SEI,
+    RVPU_PRIM_CONTROL,
+    RVPU_PRIM_RESET,
+    RVPU_PRIM_FLUSH,
+    RVPU_PRIM_MAX
+} RVPU_PRIM_CODE;
+
 MPP_RET hal_h264e_stub_init    (void *hal, MppHalCfg *cfg);
 MPP_RET hal_h264e_stub_deinit  (void *hal);
 MPP_RET hal_h264e_stub_gen_regs(void *hal, HalTaskInfo *task);

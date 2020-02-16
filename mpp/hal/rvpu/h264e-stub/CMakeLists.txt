@@ -17,7 +17,7 @@ add_library(hal_h264e_stub STATIC
             ${HAL_H264E_SRC}
             )
 
-if (USE_VPU_NVIDIA AND NOT ANDROID)
+if (USE_VPU_NVIDIA)
   include_directories(../nvidia)
   add_definitions(-DUSE_VPU_NVIDIA)
   set(H264E_STUB_DEPS hal_h264e_nv)
@@ -30,9 +30,7 @@ if (USE_SOFT_X264)
 endif ()
 
 if (USE_REMOTE_VPU)
-  if (ANDROID AND USE_VPU_NVIDIA)
-    add_definitions(-D_VPU_STUB_)
-  endif ()
+  add_definitions(-D_VPU_STUB_)
 endif ()
 
 target_link_libraries(hal_h264e_stub ${H264E_STUB_DEPS} hal_h264e)

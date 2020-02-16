@@ -539,7 +539,7 @@ typedef struct MppEncH264Trans_t {
     RK_S32  scaling_list_enable;
     RK_S8   inter_scaling_list_8x8[64];
     RK_S8   intra_scaling_list_8x8[64];
-    RK_S8   chroma_qp_offset;;
+    RK_S8   chroma_qp_offset;
 } MppEncH264Trans;
 
 typedef struct MppEncH264Entropy_t {
