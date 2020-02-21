@@ -354,6 +354,7 @@ static MPP_RET allocator_ion_open(void **ctx, MppAllocatorCfg *cfg)
         p->alignment    = cfg->alignment;
         p->ion_device   = fd;
         *ctx = p;
+        mpp_log("open allocator %p with fd %d\n", p, p->ion_device);
     }
 
     return MPP_OK;
@@ -402,14 +403,26 @@ static MPP_RET allocator_ion_import(void *ctx, MppBufferInfo *data)
                  ctx, p->ion_device, data->fd, data->size);
 
     fd_data.fd = data->fd;
+    if (data->fd <= 0) { // map fd again from ion handle
+        if (MPP_OK != (ret = ion_map_fd(p->ion_device, data->hnd, &fd_data.fd))) {
+            mpp_err_f("ion_map_fd failed ret %d\n", ret);
+            goto RET;
+        }
+    }
+
     ret = ion_ioctl(p->ion_device, ION_IOC_IMPORT, &fd_data);
     if (0 > fd_data.handle) {
-        mpp_err_f("fd %d import failed for %s\n", data->fd, strerror(errno));
+        mpp_err_f("%p import fd %d failed for %s\n", ctx, data->fd, strerror(errno));
         goto RET;
     }
 
     data->hnd = (void *)(intptr_t)fd_data.handle;
-    ret = ion_map_fd(p->ion_device, fd_data.handle, &data->fd);
+
+    if (data->fd <= 0) {
+        data->fd = fd_data.fd;
+    } else {  // update fd if data->fd has benn given
+        ret = ion_map_fd(p->ion_device, fd_data.handle, &data->fd);
+    }
     data->ptr = NULL;
 RET:
     ion_dbg_func("leave: ret %d handle %d\n", ret, data->hnd);
@@ -487,6 +500,25 @@ static MPP_RET allocator_ion_close(void *ctx)
     ion_dbg_func("leave: ret %d\n", ret);
 
     return ret;
+}
+
+MPP_RET _allocator_ion_custom_ioctl(void *ctx, unsigned int cmd, unsigned long args)
+{
+    struct ion_custom_data data = { cmd, args };
+    allocator_ctx_ion *p = (allocator_ctx_ion *)ctx;
+
+    if (NULL == p) {
+        mpp_err("_allocator_custom_ioctl Android do not accept NULL input\n");
+        return MPP_ERR_NULL_PTR;
+    }
+
+    ion_dbg(ION_IOCTL, "custom-ioctl fd %d { %08X %lu } \n", p->ion_device, cmd, args);
+    
+    if (ion_ioctl(p->ion_device, ION_IOC_CUSTOM, &data) != 0) {
+        return MPP_ERR_VALUE;
+    }
+
+    return MPP_OK;
 }
 
 os_allocator allocator_ion = {

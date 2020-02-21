@@ -22,6 +22,37 @@
 #include "mpp_mem.h"
 #include "mpp_buffer_impl.h"
 
+/* ion-share features to enable import buffer from container */
+#include "mpp_allocator_impl.h"
+extern "C" MPP_RET _allocator_ion_custom_ioctl(void *, unsigned int, unsigned long);
+
+MPP_RET mpp_buffer_group_share(MppBufferGroup group, unsigned int cmd, unsigned long arg)
+{
+    MPP_RET ret;
+    MppBufferGroupImpl *p = (MppBufferGroupImpl *)group;
+
+    if (!p) {
+        // p = mpp_buffer_get_misc_group(MPP_BUFFER_INTERNAL, MPP_BUFFER_TYPE_ION);
+        p = mpp_buffer_get_misc_group(MPP_BUFFER_EXTERNAL, MPP_BUFFER_TYPE_ION);
+    }
+    
+    mpp_assert(p);
+
+    // pre-open ion device 
+    MppBuffer buff;
+    if (MPP_OK == (ret = mpp_buffer_get(p, &buff, 1024))) {
+        mpp_buffer_put(buff);
+        mpp_err("mpp_buffer_get success, should not happend for buffer external");
+    }
+
+    MppAllocatorImpl *allocator = (MppAllocatorImpl *)p->allocator;
+
+    if (MPP_OK == (ret = _allocator_ion_custom_ioctl(allocator->ctx, cmd, arg))) {
+        mpp_log("shared local allocator-ion %p", allocator->ctx);
+    }
+    return ret;
+}
+
 MPP_RET mpp_buffer_import_with_tag(MppBufferGroup group, MppBufferInfo *info, MppBuffer *buffer,
                                    const char *tag, const char *caller)
 {

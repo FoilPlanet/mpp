@@ -230,9 +230,10 @@ MPP_RET hal_h264e_x264_wait(void *hal, HalTaskInfo *task)
     size_t size = info->param.i_width * info->param.i_height;
     unsigned char *pbuf = mpp_buffer_get_ptr(input);
 
+    size_t plane_size = (size >> 2);    // size / 4
     memcpy(in_pic->img.plane[0], pbuf, size);
-    memcpy(in_pic->img.plane[1], pbuf + size, size / 4);
-    memcpy(in_pic->img.plane[2], pbuf + size * 5 / 4, size / 4);
+    memcpy(in_pic->img.plane[1], pbuf + size, plane_size);
+    memcpy(in_pic->img.plane[2], pbuf + size + plane_size, plane_size);
 
     in_pic->i_type    = X264_TYPE_AUTO;
     in_pic->i_qpplus1 = 0;

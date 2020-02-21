@@ -39,6 +39,7 @@ case $ANDROID_ABI in
     echo "--- Build $ANDROID_ABI in '$BUILD_PATH' ---"
     mkdir -p ${BUILD_PATH} && cd ${BUILD_PATH}
     PLATFORM=$ANDROID_NDK/platforms/${API_LEVEL}/arch-arm64
+    VPU_FLAGS=""
     cmake -DCMAKE_TOOLCHAIN_FILE=../build/android/android.toolchain.cmake     \
         -DCMAKE_BUILD_TYPE=Release                                            \
         -DCMAKE_MAKE_PROGRAM=${MAKE_PROGRAM}                                  \
@@ -51,6 +52,7 @@ case $ANDROID_ABI in
         -DANDROID_STL=system                                                  \
         -DRKPLATFORM=ON                                                       \
         -DHAVE_DRM=ON                                                         \
+        ${VPU_FLAGS}                                                          \
         ..
     ;;
   x86)
@@ -73,6 +75,8 @@ case $ANDROID_ABI in
     echo "--- Build $ANDROID_ABI in '$BUILD_PATH' ---"
     mkdir -p ${BUILD_PATH} && cd ${BUILD_PATH}
     PLATFORM=$ANDROID_NDK/platforms/${API_LEVEL}/arch-x86_64
+    # VPU_FLAGS="-DUSE_REMOTE_VPU=ON -DUSE_SOFT_X264=ON"
+    VPU_FLAGS="-DUSE_REMOTE_VPU=ON"
     cmake -DCMAKE_TOOLCHAIN_FILE=../build/android/android.toolchain.cmake     \
         -DCMAKE_BUILD_TYPE=Release                                            \
         -DANDROID_NDK=${ANDROID_NDK}                                          \
@@ -81,7 +85,7 @@ case $ANDROID_ABI in
         -DANDROID_TOOLCHAIN_NAME="x86_64-4.9"                                 \
         -DANDROID_NATIVE_API_LEVEL=${API_LEVEL}                               \
         -DANDROID_STL=system                                                  \
-        -DUSE_REMOTE_VPU=ON                                                   \
+        ${VPU_FLAGS}                                                          \
         ..
     ;;
   install)

@@ -32,6 +32,7 @@
 #include "mpp_common.h"
 #include "mpp_mem.h"
 #include "mpp_log.h"
+#include "mpp_allocator.h"
 
 #include "h264_syntax.h"
 #include "hal_h264e_stub.h"
@@ -223,6 +224,9 @@ MPP_RET hal_h264e_stub_start(void *hal, HalTaskInfo *task)
         (void)hal;
         mpp_buffer_info_get(input, &binfo);
         if (binfo.type == MPP_BUFFER_TYPE_ION) {
+            // mpp_buffer_inc_ref(input);
+            binfo.fd = 0;       // requires ion_map from binfo.hdl
+            binfo.ptr = NULL;   // required ion_import
             send_remote(remote_fd, RVPU_PRIM_START, &binfo, sizeof(binfo));
         } else {
             send_remote(remote_fd, RVPU_PRIM_START, NULL, 0);
@@ -261,6 +265,8 @@ MPP_RET hal_h264e_stub_wait(void *hal, HalTaskInfo *task)
             // unsigned char *pbuf  = mpp_buffer_get_ptr(output);
             // TODO: clear output buffer ready-flag
             // pbuf[0] = '\0';
+            binfo.fd = 0;       // requires ion_map from binfo.hdl
+            binfo.ptr = NULL;   // required ion_import
             send_remote(remote_fd, RVPU_PRIM_WAIT, &binfo, sizeof(binfo));
             // TODO: set output buffer ready-flag
             // while (!puf[0]) { usleep(100); }
