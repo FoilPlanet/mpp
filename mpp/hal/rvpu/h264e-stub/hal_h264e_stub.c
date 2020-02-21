@@ -117,7 +117,7 @@ MPP_RET hal_h264e_stub_init(void *hal, MppHalCfg *cfg)
 
         memset(&addr, 0, sizeof(addr));
         addr.sun_family = AF_UNIX;
-        strncpy(addr.sun_path, srvname, strlen(srvname));
+        strncpy(addr.sun_path, srvname, sizeof(addr.sun_path));
         len = offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path);
         if (connect(fd, (struct sockaddr *)&addr, len) < 0) {
             close(fd);
@@ -132,7 +132,7 @@ MPP_RET hal_h264e_stub_init(void *hal, MppHalCfg *cfg)
             (void) write(remote_fd, &cmd, sizeof(cmd));
             nread = read(remote_fd, &rsp, sizeof(rsp));
             if (nread < 0 || rsp.type != cmd.type) {
-                mpp_err("invalid response type %d (%s)", rsp.type, sizeof(rsp));
+                mpp_err("invalid response type %d (%d)", rsp.type, sizeof(rsp));
             }
         }
     }
