@@ -22,19 +22,22 @@ static inline bool operator!=(const GUID &guid1, const GUID &guid2) {
 }
 #endif
 
-NvEncoder::NvEncoder(NV_ENC_DEVICE_TYPE eDeviceType, void *pDevice, uint32_t nWidth, uint32_t nHeight, NV_ENC_BUFFER_FORMAT eBufferFormat,
-                            uint32_t nExtraOutputDelay, bool bMotionEstimationOnly, bool bOutputInVideoMemory) :
-    m_pDevice(pDevice), 
-    m_eDeviceType(eDeviceType),
-    m_nWidth(nWidth),
-    m_nHeight(nHeight),
-    m_nMaxEncodeWidth(nWidth),
-    m_nMaxEncodeHeight(nHeight),
-    m_eBufferFormat(eBufferFormat), 
+NvEncoder::NvEncoder(NV_ENC_DEVICE_TYPE eDeviceType, void *pDevice,
+                     uint32_t nWidth, uint32_t nHeight, 
+                     NV_ENC_BUFFER_FORMAT eBufferFormat,
+                     uint32_t nExtraOutputDelay,
+                     bool bMotionEstimationOnly, bool bOutputInVideoMemory) :
     m_bMotionEstimationOnly(bMotionEstimationOnly), 
     m_bOutputInVideoMemory(bOutputInVideoMemory),
-    m_nExtraOutputDelay(nExtraOutputDelay), 
-    m_hEncoder(nullptr)
+    m_hEncoder(nullptr),
+    m_nWidth(nWidth),
+    m_nHeight(nHeight),
+    m_eBufferFormat(eBufferFormat), 
+    m_pDevice(pDevice), 
+    m_eDeviceType(eDeviceType),
+    m_nExtraOutputDelay(nExtraOutputDelay),
+    m_nMaxEncodeWidth(nWidth),
+    m_nMaxEncodeHeight(nHeight)
 {
     LoadNvEncApi();
 

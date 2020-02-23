@@ -68,11 +68,22 @@ static MPP_RET reinit_nvenc(MppEncCfgSet *cfg, HalNvEncInfo *info)
 
     NV_ENC_INITIALIZE_PARAMS param = { 0 };
     NV_ENC_CONFIG encodeConfig = { NV_ENC_CONFIG_VER };
+    GUID encode_guid   = NV_ENC_CODEC_H264_GUID;
+    GUID preset_guid   = NV_ENC_PRESET_HP_GUID;  // NV_ENC_PRESET_DEFAULT_GUID;
     param.version      = NV_ENC_INITIALIZE_PARAMS_VER;
     param.encodeConfig = &encodeConfig;
-    GUID encode_guid = NV_ENC_CODEC_H264_GUID;
-    GUID preset_guid = NV_ENC_PRESET_DEFAULT_GUID;
     encoder->CreateDefaultEncoderParams(&param, encode_guid, preset_guid);
+
+    param.frameRateNum = cfg->rc.fps_in_num;
+    encodeConfig.profileGUID = NV_ENC_H264_PROFILE_BASELINE_GUID;
+    encodeConfig.gopLength   = cfg->rc.gop;
+    encodeConfig.rcParams.rateControlMode = NV_ENC_PARAMS_RC_VBR;
+    // encodeConfig.rcParams.constQP = { 28, 31, 25 };
+
+    encodeConfig.encodeCodecConfig.h264Config.idrPeriod     = cfg->rc.gop;
+    encodeConfig.encodeCodecConfig.h264Config.disableSPSPPS = 0;
+    encodeConfig.encodeCodecConfig.h264Config.repeatSPSPPS  = 1;
+
     encoder->CreateEncoder(&param);
 
     // Initialize stream
@@ -256,9 +267,12 @@ MPP_RET hal_h264e_nv_wait(void *hal, HalTaskInfo *task)
     void *pbuf = mpp_buffer_get_ptr(output);
     std::vector<NV_ENC_OUTPUT_PTR> packets;
     NvEncoderOutputInVidMemCuda *encoder = static_cast<NvEncoderOutputInVidMemCuda *>(info->encoder);
-    encoder->EncodeFrame(packets);
+    // NV_ENC_PIC_PARAMS params = { 0 };
+    // params.encodePicFlags = NV_ENC_PIC_FLAG_OUTPUT_SPSPPS;
+    encoder->EncodeFrame(packets /* &params */);
 
     uint32_t bsize = 0;
+    uint32_t padding = 4;   // 00 00 00 01
     if (packets.size() > 0) {
         // only use first frame
         NV_ENC_OUTPUT_PTR pkt_ptr = packets[0];
@@ -269,8 +283,9 @@ MPP_RET hal_h264e_nv_wait(void *hal, HalTaskInfo *task)
         cuCtxPushCurrent(info->cu_context);
         // cuMemcpyDtoH(pbuf, (CUdeviceptr)pkt_ptr, encoder->GetOutputBufferSize());
         cuMemcpyDtoH(pbuf, (CUdeviceptr)pkt_ptr, sizeof(NV_ENC_ENCODE_OUT_PARAMS));
-        if (0 < (bsize = pkt_parm->bitstreamSizeInBytes)) {
-            cuMemcpyDtoH(pbuf, (CUdeviceptr)pkt_ptr + sizeof(NV_ENC_ENCODE_OUT_PARAMS), bsize);
+        if ((bsize = pkt_parm->bitstreamSizeInBytes) > padding) {
+            bsize -= padding;
+            cuMemcpyDtoH(pbuf, (CUdeviceptr)pkt_ptr + sizeof(NV_ENC_ENCODE_OUT_PARAMS) + padding, bsize);
         }
         cuCtxPopCurrent(NULL);
     }
