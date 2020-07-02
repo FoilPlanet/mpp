@@ -163,6 +163,7 @@ MPP_RET Mpp::init(MppCtxType type, MppCodingType coding)
         };
 
         mpp_env_get_u32("enc_version", &mEncVersion, 0);
+        mpp_log_f("enc_version is %d", mEncVersion);
 
         if (mEncVersion) {
             mpp_enc_init_v2(&mEnc, &cfg);

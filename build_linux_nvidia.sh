@@ -10,7 +10,7 @@ TARGET_ABI=${1:-"x86_64"}
 BUILD_PATH=build-linux-${TARGET_ABI}
 VERSION=20190904_1.00
 
-INSTALL_PREFIX=..
+INSTALL_PREFIX=../../..
 
 MAKE_PROGRAM=`which make`
 
@@ -28,35 +28,26 @@ esac
 case $TARGET_ABI in
   arm64-v8a)
     echo "--- Build linux in '$BUILD_PATH' ---"
-    mkdir -p ${BUILD_PATH} && cd ${BUILD_PATH}
-    cmake -DCMAKE_BUILD_TYPE=Release                      \
-          -DCMAKE_MAKE_PROGRAM=${MAKE_PROGRAM}            \
-          -DTARGET_ABI=${TARGET_ABI}                      \
-          -DRKPLATFORM=ON                                 \
-          -DHAVE_DRM=ON                                   \
-          ${CROSS_COMPILER_FLAGS}                         \
-          ..
+    echo "NOT IMPLEMENTED"
+    exit -1
     ;;
   x86 | x86_64)
     echo "--- Build linux in '$BUILD_PATH' ---"
     mkdir -p ${BUILD_PATH} && cd ${BUILD_PATH}
-    # VPU_FLAGS="-DUSE_SOFT_X264=ON"
-    VPU_FLAGS="-DUSE_VPU_NVIDIA=ON"
+    VPU_FLAGS="-DUSE_SOFT_X264=OFF -DUSE_VPU_NVIDIA=ON"
     cmake -DCMAKE_BUILD_TYPE=Release                      \
           -DCMAKE_MAKE_PROGRAM=${MAKE_PROGRAM}            \
           -DTARGET_ABI=${TARGET_ABI}                      \
           -DHAVE_DRM=OFF                                  \
-	  ${VPU_FLAGS}                                    \
+          ${VPU_FLAGS}                                    \
           ..
     ;;
   install)
     INSTALL_PATH=${INSTALL_PREFIX}/libs/mpp-${VERSION}
-    mkdir -p ${INSTALL_PATH}/linux/x86_64/lib
-    mkdir -p ${INSTALL_PATH}/linux/arm64-v8a/lib
+    mkdir -p ${INSTALL_PATH}/linux/x86_64/lib.nvidia
     mkdir -p ${INSTALL_PATH}/include
     cp -a  ./inc/* ${INSTALL_PATH}/include
-    cp -av ./build-linux-x86_64/mpp/lib*    ${INSTALL_PATH}/linux/x86_64/lib
-    cp -av ./build-linux-arm64-v8a/mpp/lib* ${INSTALL_PATH}/linux/arm64-v8a/lib
+    cp -av ./build-linux-x86_64/mpp/lib*    ${INSTALL_PATH}/linux/x86_64/lib.nvidia
     exit 0
     ;; 
   *)
@@ -67,7 +58,8 @@ esac
 
 # ----------------------------------------------------------------------------
 # usefull cmake debug flag
-# ----------------------------------------------------------------------------      #-DCMAKE_BUILD_TYPE=Debug                                              \
+# ---------------------------------------------------------------------------- 
+      #-DCMAKE_BUILD_TYPE=Debug                                              \
       #-DCMAKE_VERBOSE_MAKEFILE=true                                         \
       #--trace                                                               \
       #--debug-output                                                        \

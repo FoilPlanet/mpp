@@ -43,6 +43,10 @@
 #include "hal_h264d_vdpu2.h"
 #include "hal_h264d_vdpu1.h"
 
+#ifdef USE_REMOTE_VPU
+#include "hal_h264d_stub.h"
+#endif
+
 RK_U32 rkv_h264d_hal_debug = 0;
 
 static void explain_input_buffer(void *hal, HalDecTask *task)
@@ -150,9 +154,21 @@ MPP_RET hal_h264d_init(void *hal, MppHalCfg *cfg)
         cfg->device_id = DEV_VDPU;
         break;
     default:
+      #if defined(USE_REMOTE_VPU) || defined(USE_SOFT_X264) || defined(USE_VPU_NVIDIA)
+        p_api->init    = hal_h264d_stub_init;
+        p_api->deinit  = hal_h264d_stub_deinit;
+        p_api->reg_gen = hal_h264d_stub_gen_regs;
+        p_api->start   = hal_h264d_stub_start;
+        p_api->wait    = hal_h264d_stub_wait;
+        p_api->reset   = hal_h264d_stub_reset;
+        p_api->flush   = hal_h264d_stub_flush;
+        p_api->control = hal_h264d_stub_control;
+        cfg->device_id = DEV_VDPU;
+      #else /* !USE_REMOTE_VPU */
         mpp_err_f("hard mode error, value=%d\n", hard_mode);
         mpp_assert(0);
         break;
+      #endif /* USE_REMOTE_VPU */
     }
     //!< callback function to parser module
     p_hal->init_cb = cfg->hal_int_cb;

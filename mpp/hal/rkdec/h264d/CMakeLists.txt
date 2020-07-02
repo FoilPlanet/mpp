@@ -19,6 +19,23 @@ add_library(hal_h264d STATIC
             ${HAL_H264D_SRC}
             )
 
-target_link_libraries(hal_h264d mpp_base mpp_hal)
+# remote vpu
+if (USE_VPU_NVIDIA)
+  add_definitions(-DUSE_VPU_NVIDIA)
+endif ()
+
+if (USE_SOFT_X264)
+  add_definitions(-DUSE_SOFT_X264)
+endif ()
+
+if (USE_REMOTE_VPU OR USE_VPU_NVIDIA OR USE_SOFT_X264)
+  include_directories(../../rvpu/h264-stub/)
+  add_definitions(-DUSE_REMOTE_VPU)
+  set(HAL_H264D_LIBS hal_h264_stub)
+else()
+  set(HAL_H264D_LIBS )
+endif()
+
+target_link_libraries(hal_h264d ${HAL_H264D_LIBS} mpp_base mpp_hal)
 set_target_properties(hal_h264d PROPERTIES FOLDER "mpp/hal")
 

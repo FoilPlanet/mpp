@@ -46,6 +46,11 @@ set (MPP_SRC
     mpi.cpp
     )
 
+# rvpu_api
+if (NOT ANDROID)
+  set(MPP_SRC ${MPP_SRC} rvpu_api.cpp)
+endif ()
+
 set(MPP_VERSION "0")
 set(MPP_ABI_VERSION "1")
 
@@ -66,7 +71,6 @@ if (NOT ANDROID)
 set_target_properties(${MPP_SHARED} PROPERTIES VERSION ${MPP_VERSION})
 set_target_properties(${MPP_SHARED} PROPERTIES SOVERSION ${MPP_ABI_VERSION})
 endif()
-
 
 add_subdirectory(legacy)
 

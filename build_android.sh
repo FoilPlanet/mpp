@@ -21,6 +21,7 @@ case $ANDROID_ABI in
     echo "--- Build $ANDROID_ABI in '$BUILD_PATH' ---"
     mkdir -p ${BUILD_PATH} && cd ${BUILD_PATH}
     PLATFORM=$ANDROID_NDK/platforms/${API_LEVEL}/arch-arm
+    VPU_FLAGS="-DUSE_SOFT_JPEG=OFF"
     cmake -DCMAKE_TOOLCHAIN_FILE=../build/android/android.toolchain.cmake     \
         -DCMAKE_BUILD_TYPE=Release                                            \
         -DCMAKE_MAKE_PROGRAM=${MAKE_PROGRAM}                                  \
@@ -33,13 +34,14 @@ case $ANDROID_ABI in
         -DANDROID_STL=system                                                  \
         -DRKPLATFORM=ON                                                       \
         -DHAVE_DRM=ON                                                         \
+        ${VPU_FLAGS}                                                          \
         ..
     ;;
   arm64-v8a)
     echo "--- Build $ANDROID_ABI in '$BUILD_PATH' ---"
     mkdir -p ${BUILD_PATH} && cd ${BUILD_PATH}
     PLATFORM=$ANDROID_NDK/platforms/${API_LEVEL}/arch-arm64
-    VPU_FLAGS=""
+    VPU_FLAGS="-DUSE_SOFT_JPEG=OFF"
     cmake -DCMAKE_TOOLCHAIN_FILE=../build/android/android.toolchain.cmake     \
         -DCMAKE_BUILD_TYPE=Release                                            \
         -DCMAKE_MAKE_PROGRAM=${MAKE_PROGRAM}                                  \
@@ -59,6 +61,7 @@ case $ANDROID_ABI in
     echo "--- Build $ANDROID_ABI in '$BUILD_PATH' ---"
     mkdir -p ${BUILD_PATH} && cd ${BUILD_PATH}
     PLATFORM=$ANDROID_NDK/platforms/${API_LEVEL}/arch-x86
+    VPU_FLAGS="-DUSE_REMOTE_VPU=ON"
     cmake -DCMAKE_TOOLCHAIN_FILE=../build/android/android.toolchain.cmake     \
         -DCMAKE_BUILD_TYPE=Release                                            \
         -DANDROID_FORCE_ARM_BUILD=ON                                          \
@@ -68,7 +71,7 @@ case $ANDROID_ABI in
         -DANDROID_TOOLCHAIN_NAME="x86-4.9"                                    \
         -DANDROID_NATIVE_API_LEVEL=${API_LEVEL}                               \
         -DANDROID_STL=system                                                  \
-        -DUSE_REMOTE_VPU=ON                                                   \
+        ${VPU_FLAGS}                                                          \
         ..
     ;;
   x86_64)
@@ -89,9 +92,13 @@ case $ANDROID_ABI in
         ..
     ;;
   install)
-    INSTALL_PATH=$INSTALL_PREFIX
-    cp -av ./build-x86_64/mpp/libmpp*    ${INSTALL_PATH}/libs/x86_64
-    cp -av ./build-arm64-v8a/mpp/libmpp* ${INSTALL_PATH}/libs/arm64-v8a
+    INSTALL_PATH=$INSTALL_PREFIX/libs
+    cp -av ./build-x86_64/mpp/libmpp*             ${INSTALL_PATH}/x86_64
+    cp -av ./build-x86_64/mpp/legacy/libvpu*      ${INSTALL_PATH}/x86_64
+    cp -av ./build-arm64-v8a/mpp/libmpp*          ${INSTALL_PATH}/arm64-v8a
+    cp -av ./build-arm64-v8a/mpp/legacy/libvpu*   ${INSTALL_PATH}/arm64-v8a
+    cp -av ./build-armeabi-v7a/mpp/libmpp*        ${INSTALL_PATH}/armeabi-v7a
+    cp -av ./build-armeabi-v7a/mpp/legacy/libvpu* ${INSTALL_PATH}/armeabi-v7a
     exit 0
     ;; 
   *)

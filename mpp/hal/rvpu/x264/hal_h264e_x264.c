@@ -25,10 +25,8 @@
 #include "mpp_mem.h"
 
 #include "h264_syntax.h"
+
 #include "hal_h264e_x264.h"
-
-#include "h264_syntax.h"
-
 #include "x264.h"
 #include "x264_config.h"
 
@@ -53,6 +51,7 @@ int __assert2(int val)
     if (!val) {
         mpp_err("assert in x264\n");
     }
+    return 0;
 }
 
 static int get_rf_constant(Halx264ExtraInfo *info)

@@ -1,24 +1,25 @@
 # vim: syntax=cmake
 include_directories(.)
 include_directories(../../common/h264/)
+include_directories(../../rkdec/h264d/)
 
 if (ANDROID)
   set(TARGET_ABI ${ANDROID_ABI})
 endif ()
 
 # hal h264 header
-set(HAL_X264E_HDR
+set(HAL_X264_HDR
     hal_h264e_x264.h
     )
 
 # hal h264 encoder sourse
-set(HAL_X264E_SRC
+set(HAL_X264_SRC
     hal_h264e_x264.c
     )
 
 add_library(hal_h264e_x264 STATIC
-            ${HAL_X264E_HDR}
-            ${HAL_X264E_SRC}
+            ${HAL_X264_HDR}
+            ${HAL_X264_SRC}
             )
 
 # add path for libx264 ${TARGET_ABI}

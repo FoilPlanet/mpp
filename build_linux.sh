@@ -29,34 +29,35 @@ case $TARGET_ABI in
   arm64-v8a)
     echo "--- Build linux in '$BUILD_PATH' ---"
     mkdir -p ${BUILD_PATH} && cd ${BUILD_PATH}
+    VPU_FLAGS="-DUSE_SOFT_X264=OFF"
     cmake -DCMAKE_BUILD_TYPE=Release                      \
           -DCMAKE_MAKE_PROGRAM=${MAKE_PROGRAM}            \
           -DTARGET_ABI=${TARGET_ABI}                      \
           -DRKPLATFORM=ON                                 \
           -DHAVE_DRM=ON                                   \
           ${CROSS_COMPILER_FLAGS}                         \
+          ${VPU_FLAGS}                                    \
           ..
     ;;
   x86 | x86_64)
     echo "--- Build linux in '$BUILD_PATH' ---"
     mkdir -p ${BUILD_PATH} && cd ${BUILD_PATH}
     VPU_FLAGS="-DUSE_SOFT_X264=ON"
-    # VPU_FLAGS="-DUSE_VPU_NVIDIA=ON"
     cmake -DCMAKE_BUILD_TYPE=Release                      \
           -DCMAKE_MAKE_PROGRAM=${MAKE_PROGRAM}            \
           -DTARGET_ABI=${TARGET_ABI}                      \
           -DHAVE_DRM=OFF                                  \
-	  ${VPU_FLAGS}                                    \
+          ${VPU_FLAGS}                                    \
           ..
     ;;
   install)
     INSTALL_PATH=${INSTALL_PREFIX}/libs/mpp-${VERSION}
-    mkdir -p ${INSTALL_PATH}/linux/x86_64/lib
-    mkdir -p ${INSTALL_PATH}/linux/arm64-v8a/lib
+    mkdir -p ${INSTALL_PATH}/linux/x86_64/lib.x264
+    mkdir -p ${INSTALL_PATH}/linux/aarch64/lib
     mkdir -p ${INSTALL_PATH}/include
     cp -a  ./inc/* ${INSTALL_PATH}/include
-    cp -av ./build-linux-x86_64/mpp/lib*    ${INSTALL_PATH}/linux/x86_64/lib
-    cp -av ./build-linux-arm64-v8a/mpp/lib* ${INSTALL_PATH}/linux/arm64-v8a/lib
+    cp -av ./build-linux-x86_64/mpp/lib*    ${INSTALL_PATH}/linux/x86_64/lib.x264
+    cp -av ./build-linux-arm64-v8a/mpp/lib* ${INSTALL_PATH}/linux/aarch64/lib
     exit 0
     ;; 
   *)
@@ -67,7 +68,8 @@ esac
 
 # ----------------------------------------------------------------------------
 # usefull cmake debug flag
-# ----------------------------------------------------------------------------      #-DCMAKE_BUILD_TYPE=Debug                                              \
+# ---------------------------------------------------------------------------- 
+      #-DCMAKE_BUILD_TYPE=Debug                                              \
       #-DCMAKE_VERBOSE_MAKEFILE=true                                         \
       #--trace                                                               \
       #--debug-output                                                        \

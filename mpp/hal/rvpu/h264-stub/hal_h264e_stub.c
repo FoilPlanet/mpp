@@ -20,14 +20,6 @@
 #include <math.h>
 #include <limits.h>
 
-#include <fcntl.h>
-#include <sys/errno.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/un.h>
-#include <unistd.h>
-
 #include "mpp_device.h"
 #include "mpp_common.h"
 #include "mpp_mem.h"
@@ -36,6 +28,7 @@
 
 #include "h264_syntax.h"
 #include "hal_h264e_stub.h"
+#include "rvpu_primitive.h"
 
 #ifdef USE_VPU_NVIDIA
 #include "hal_h264e_nv.h"
@@ -45,31 +38,7 @@
 #include "hal_h264e_x264.h"
 #endif
 
-#ifdef _VPU_STUB_
-#define DEF_RVPU_SOCKNAME       "/dev/anbox_audio"
-static int remote_fd = -1;
-#endif
-
-/**
- * RVPU channel client info
- */
-typedef struct _client_info {
-    unsigned char type;         /**< 0:playback 1:recording 2:screenshot(*) */
-} ClientInfo;
-
-void send_remote(int fd, RVPU_PRIM_CODE prim, void *data, size_t datasiz)
-{
-    char buf[8 + sizeof(H264eHalContext)];
-    size_t len;
-    if (datasiz > 0) {
-        int n = sprintf(buf, "%d:%lu:", prim, datasiz);
-        memcpy(&buf[n], data, datasiz);
-        len = n + datasiz;
-    } else {
-        len = sprintf(buf, "%d:0:", prim);
-    }
-    send(fd, buf, len, MSG_NOSIGNAL);
-}
+const int MAX_WAIT_TIMES = 50;     // 50ms
 
 MPP_RET hal_h264e_stub_init(void *hal, MppHalCfg *cfg)
 {
@@ -88,57 +57,16 @@ MPP_RET hal_h264e_stub_init(void *hal, MppHalCfg *cfg)
     ret = hal_h264e_nv_init(hal, cfg);
 #elif defined(USE_SOFT_VPU_X264)
     ret = hal_h264e_x264_init(hal, cfg);
-#endif
-
-#ifdef _VPU_STUB_
-    if (-1 == remote_fd) {  // connect to unix socket
-        struct sockaddr_un addr;
-        const char *srvname = DEF_RVPU_SOCKNAME;
-        int fd, len;
-
-        if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-            mpp_err("create socket with error: %s", strerror(errno));
-            return MPP_ERR_OPEN_FILE;
+#elif defined(_VPU_STUB_)
+    if (NULL == (ctx->extra_info = mpp_calloc(HalRvpuInfo, 1))) {
+        ret = MPP_ERR_NOMEM;
+    } else {
+        HalRvpuInfo *info = (HalRvpuInfo *)ctx->extra_info;
+        if ((info->remote_fd = connect_remote()) > 0) {
+            ret = send_remote(info->remote_fd, RVPU_PRIM_INIT, NULL, 0);
+        } else {
+            ret = MPP_NOK;
         }
-
-        // bind to a temporary path
-    #ifdef CLIENT_BIND_PATH
-        memset(&addr, 0, sizeof(addr));
-        addr.sun_family = AF_UNIX;
-        sprintf(addr.sun_path, "/var/run/mpp%05d.socket", getpid());
-        unlink(addr.sun_path);
-        len = offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path);
-        if (bind(fd, (struct sockaddr*)&addr, len) < 0) {
-            close(fd);
-            mpp_err("bind to '%s' with error: %s", addr.sun_path, strerror(errno));
-            return MPP_ERR_OPEN_FILE;
-        }
-    #endif /* CLIENT_BIND_PATH */
-
-        memset(&addr, 0, sizeof(addr));
-        addr.sun_family = AF_UNIX;
-        strncpy(addr.sun_path, srvname, sizeof(addr.sun_path));
-        len = offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path);
-        if (connect(fd, (struct sockaddr *)&addr, len) < 0) {
-            close(fd);
-            mpp_err("connect to '%s' with error: %s", addr.sun_path, strerror(errno));
-            return MPP_ERR_OPEN_FILE;
-        }
-
-        if ((remote_fd = fd) > 0) { // create a channel for streaming
-            int nread;
-            ClientInfo cmd = { 0x02 }, rsp;
-            mpp_log("connected to '%s'", addr.sun_path);
-            (void) write(remote_fd, &cmd, sizeof(cmd));
-            nread = read(remote_fd, &rsp, sizeof(rsp));
-            if (nread < 0 || rsp.type != cmd.type) {
-                mpp_err("invalid response type %d (%d)", rsp.type, sizeof(rsp));
-            }
-        }
-    }
-
-    if (remote_fd > 0) {
-        send_remote(remote_fd, RVPU_PRIM_INIT, NULL, 0);
     }
 #endif
 
@@ -160,13 +88,13 @@ MPP_RET hal_h264e_stub_deinit(void *hal)
     ret = hal_h264e_nv_deinit(hal);
 #elif defined(USE_SOFT_VPU_X264)
     ret = hal_h264e_x264_deinit(hal);
-#endif
-
-#ifdef _VPU_STUB_
-    if (remote_fd > 0) {
-        send_remote(remote_fd, RVPU_PRIM_DEINIT, NULL, 0);
-        close(remote_fd);
-        remote_fd = -1;
+#elif defined(_VPU_STUB_)
+    if (ctx->extra_info != NULL) {
+        HalRvpuInfo *info = (HalRvpuInfo *)ctx->extra_info;
+        if (info->remote_fd > 0) {
+            disconnect_remote(info->remote_fd);
+        }
+        MPP_FREE(ctx->extra_info);
     }
 #endif
 
@@ -176,8 +104,6 @@ MPP_RET hal_h264e_stub_deinit(void *hal)
 MPP_RET hal_h264e_stub_gen_regs(void *hal, HalTaskInfo *task)
 {
     MPP_RET ret = MPP_OK;
-    H264eHalContext *ctx  = (H264eHalContext *)hal;
-    (void) ctx;
     (void) task;
     // MppEncPrepCfg   *prep = &ctx->cfg->prep;
     
@@ -198,8 +124,11 @@ MPP_RET hal_h264e_stub_gen_regs(void *hal, HalTaskInfo *task)
 #endif
 
 #ifdef _VPU_STUB_
-    if (remote_fd > 0) {
-        send_remote(remote_fd, RVPU_PRIM_REGS, NULL, 0);
+    H264eHalContext *ctx  = (H264eHalContext *)hal;
+    HalRvpuInfo *info = (HalRvpuInfo *)ctx->extra_info;
+
+    if (info && info->remote_fd > 0) {
+        send_remote(info->remote_fd, RVPU_PRIM_REGS, NULL, 0);
     }
 #endif
 
@@ -209,6 +138,7 @@ MPP_RET hal_h264e_stub_gen_regs(void *hal, HalTaskInfo *task)
 MPP_RET hal_h264e_stub_start(void *hal, HalTaskInfo *task)
 {
     MPP_RET ret = MPP_OK;
+
     // mpp_log("start v:%u\n", task->enc.valid);
 
 #if defined(USE_VPU_NVIDIA)
@@ -218,18 +148,20 @@ MPP_RET hal_h264e_stub_start(void *hal, HalTaskInfo *task)
 #endif
 
 #ifdef _VPU_STUB_
-    if (remote_fd > 0) {
+    H264eHalContext *ctx  = (H264eHalContext *)hal;
+    HalRvpuInfo *info = (HalRvpuInfo *)ctx->extra_info;
+
+    if (info && info->remote_fd > 0) {
         MppBuffer input = task->enc.input;
         MppBufferInfo binfo;
-        (void)hal;
         mpp_buffer_info_get(input, &binfo);
         if (binfo.type == MPP_BUFFER_TYPE_ION) {
             // mpp_buffer_inc_ref(input);
             binfo.fd = 0;       // requires ion_map from binfo.hdl
             binfo.ptr = NULL;   // required ion_import
-            send_remote(remote_fd, RVPU_PRIM_START, &binfo, sizeof(binfo));
+            send_remote(info->remote_fd, RVPU_PRIM_START, &binfo, sizeof(binfo));
         } else {
-            send_remote(remote_fd, RVPU_PRIM_START, NULL, 0);
+            send_remote(info->remote_fd, RVPU_PRIM_START, NULL, 0);
         }
     }
 #endif
@@ -240,12 +172,6 @@ MPP_RET hal_h264e_stub_start(void *hal, HalTaskInfo *task)
 MPP_RET hal_h264e_stub_wait(void *hal, HalTaskInfo *task)
 {
     MPP_RET ret = MPP_OK;
-    // H264eHalContext *ctx = (H264eHalContext *)hal;
-    // HalEncTask  *info   = &task->enc;
-    // MppBuffer   input   = info->input;
-    // MppBuffer   output  = info->output;
-    // unsigned char *pout = mpp_buffer_get_ptr(output);
-    // size_t         size = mpp_buffer_get_size(output);
 
     // mpp_log("wait w:%u v:%u\n", ctx->cfg->prep.hor_stride, task->enc.valid);
 
@@ -256,22 +182,78 @@ MPP_RET hal_h264e_stub_wait(void *hal, HalTaskInfo *task)
 #endif
 
 #ifdef _VPU_STUB_
-    if (remote_fd > 0) {
-        MppBuffer     output = task->enc.output;
+    H264eHalContext *ctx  = (H264eHalContext *)hal;
+    HalRvpuInfo *info = (HalRvpuInfo *)ctx->extra_info;
+
+    if (info && info->remote_fd > 0) {
+        size_t    outsize = 0;
+        MppBuffer output  = task->enc.output;
+        size_t    bufsize = mpp_buffer_get_size(output);
+        volatile uint32_t *ptag = (uint32_t *)mpp_buffer_get_ptr(output);
+
         MppBufferInfo binfo;
-        (void)hal;
         mpp_buffer_info_get(output, &binfo);
         if (binfo.type == MPP_BUFFER_TYPE_ION) {
-            // unsigned char *pbuf  = mpp_buffer_get_ptr(output);
-            // TODO: clear output buffer ready-flag
-            // pbuf[0] = '\0';
+            int times = MAX_WAIT_TIMES;
+
+          #ifndef RECV_SOCKET
+            // set output buffer ready-flag
+            *ptag = bufsize;
+          #endif
+
             binfo.fd = 0;       // requires ion_map from binfo.hdl
             binfo.ptr = NULL;   // required ion_import
-            send_remote(remote_fd, RVPU_PRIM_WAIT, &binfo, sizeof(binfo));
-            // TODO: set output buffer ready-flag
-            // while (!puf[0]) { usleep(100); }
+            send_remote(info->remote_fd, RVPU_PRIM_WAIT, &binfo, sizeof(binfo));
+            // wait output buffer ready
+            while (times-- > 0) {
+                usleep(1000);
+
+              #ifdef RECV_SOCKET
+                MppBufferInfo resp;
+                RVPU_PRIM_CODE prim = RVPU_PRIM_UNDEFINED;
+                if (prim == RVPU_PRIM_WAIT && 
+                    sizeof(resp) == recv_remote(info->remote_fd, &prim, &resp, sizeof(resp))) {
+                    outsize = resp.size;
+                    break;
+                }
+              #else /* !RECV_SOCKET */
+                if (*ptag < bufsize) {
+                    output = NULL;
+                    mpp_buffer_import(&output, (MppBufferInfo *)(ptag + 1));
+                    if (NULL != output) {
+                        //mpp_buffer_put(task->enc.output);
+                        task->enc.output = output;
+                        mpp_buffer_inc_ref(output);
+                        outsize = *ptag;    // packet size
+                    } else {
+                        mpp_err("invalid packet buffer with size %u", *ptag);
+                    }
+                    break;
+                }
+              #endif /* RECV_SOCKET */
+            }   // while (times)
+
+            if (outsize == 0) {
+                mpp_log("read response timeout");
+            }
         } else {
-            send_remote(remote_fd, RVPU_PRIM_WAIT, NULL, 0);
+            send_remote(info->remote_fd, RVPU_PRIM_WAIT, NULL, 0);
+        }
+
+        if (outsize > 0) {
+            h264e_feedback *feedback = &ctx->feedback;
+            IOInterruptCB  *int_cb   = &ctx->int_cb;
+            feedback->hw_status = 0;
+            feedback->out_strm_size = outsize;
+            task->enc.length = outsize;
+            if (int_cb->callBack) {
+                RcHalResult result;
+                result.bits = outsize * 8;
+                result.type = ((RcSyntax *)task->enc.syntax.data)->type;
+                feedback->result = &result;
+                // mpp_log("callback %p", int_cb->opaque);
+                int_cb->callBack(int_cb->opaque, feedback);
+            }
         }
     }
 #endif
@@ -282,6 +264,7 @@ MPP_RET hal_h264e_stub_wait(void *hal, HalTaskInfo *task)
 MPP_RET hal_h264e_stub_reset(void *hal)
 {
     MPP_RET ret = MPP_OK;
+
     mpp_log("reset %p\n", hal);
 
 #if defined(USE_VPU_NVIDIA)
@@ -291,8 +274,10 @@ MPP_RET hal_h264e_stub_reset(void *hal)
 #endif
 
 #ifdef _VPU_STUB_
-    if (remote_fd > 0) {
-        send_remote(remote_fd, RVPU_PRIM_RESET, NULL, 0);
+    H264eHalContext *ctx  = (H264eHalContext *)hal;
+    HalRvpuInfo *info = (HalRvpuInfo *)ctx->extra_info;
+    if (info && info->remote_fd > 0) {
+        send_remote(info->remote_fd, RVPU_PRIM_RESET, NULL, 0);
     }
 #endif
 
@@ -302,6 +287,7 @@ MPP_RET hal_h264e_stub_reset(void *hal)
 MPP_RET hal_h264e_stub_flush(void *hal)
 {
     MPP_RET ret = MPP_OK;
+
     mpp_log("flush %p\n", hal);
 
 #if defined(USE_VPU_NVIDIA)
@@ -311,8 +297,11 @@ MPP_RET hal_h264e_stub_flush(void *hal)
 #endif
 
 #ifdef _VPU_STUB_
-    if (remote_fd > 0) {
-        send_remote(remote_fd, RVPU_PRIM_FLUSH, NULL, 0);
+    H264eHalContext *ctx  = (H264eHalContext *)hal;
+    HalRvpuInfo *info = (HalRvpuInfo *)ctx->extra_info;
+
+    if (info && info->remote_fd > 0) {
+        send_remote(info->remote_fd, RVPU_PRIM_FLUSH, NULL, 0);
     }
 #endif
 
@@ -322,9 +311,13 @@ MPP_RET hal_h264e_stub_flush(void *hal)
 MPP_RET hal_h264e_stub_control(void *hal, RK_S32 cmd, void *param)
 {
     MPP_RET ret = MPP_OK;
-    H264eHalContext *ctx = (H264eHalContext *)hal;
+    H264eHalContext *ctx  = (H264eHalContext *)hal;
     MppEncCfgSet    *set;
     MppPacket        pkt;
+
+#ifdef _VPU_STUB_
+    HalRvpuInfo *info = (HalRvpuInfo *)ctx->extra_info;
+#endif
 
     switch (cmd) {
     case MPP_ENC_GET_EXTRA_INFO:
@@ -365,8 +358,8 @@ MPP_RET hal_h264e_stub_control(void *hal, RK_S32 cmd, void *param)
             }
 
           #ifdef _VPU_STUB_
-            if (remote_fd > 0) {
-                send_remote(remote_fd, RVPU_PRIM_CONTROL_PREP, prep, sizeof(*prep));
+            if (info && info->remote_fd > 0) {
+                send_remote(info->remote_fd, RVPU_PRIM_CONTROL_PREP, prep, sizeof(*prep));
             }
           #endif
         }
@@ -378,8 +371,8 @@ MPP_RET hal_h264e_stub_control(void *hal, RK_S32 cmd, void *param)
         if (NULL != (set = ctx->set)) {
           #ifdef _VPU_STUB_
             MppEncRcCfg *rc = &ctx->set->rc;
-            if (remote_fd > 0) {
-                send_remote(remote_fd, RVPU_PRIM_CONTROL_RC, rc, sizeof(*rc));
+            if (info && info->remote_fd > 0) {
+                send_remote(info->remote_fd, RVPU_PRIM_CONTROL_RC, rc, sizeof(*rc));
             }
           #endif
         }
@@ -448,8 +441,8 @@ MPP_RET hal_h264e_stub_control(void *hal, RK_S32 cmd, void *param)
             src->change = 0;
 
           #ifdef _VPU_STUB_
-            if (remote_fd > 0) {
-                send_remote(remote_fd, RVPU_PRIM_CONTROL_CODEC, dst, sizeof(*dst));
+            if (info && info->remote_fd > 0) {
+                send_remote(info->remote_fd, RVPU_PRIM_CONTROL_CODEC, dst, sizeof(*dst));
             }
           #endif
         }
@@ -464,8 +457,8 @@ MPP_RET hal_h264e_stub_control(void *hal, RK_S32 cmd, void *param)
         ctx->sei_mode = *((MppEncSeiMode *)param);
 
       #ifdef _VPU_STUB_
-        if (remote_fd > 0) {
-            send_remote(remote_fd, RVPU_PRIM_CONTROL_SEI, &ctx->sei_mode, sizeof(ctx->sei_mode));
+        if (info && info->remote_fd > 0) {
+            send_remote(info->remote_fd, RVPU_PRIM_CONTROL_SEI, &ctx->sei_mode, sizeof(ctx->sei_mode));
         }
       #endif
         break;
